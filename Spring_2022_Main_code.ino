@@ -11,7 +11,9 @@ const unsigned int TEMP_PIN = A14;                  // the pin of the analog por
 const unsigned int BLINK_FREQUENCY = 250;           // the frequency of the led blinking, in milliseconds
 const unsigned long TEMP_CHECK_FREQUENCY = 500;     // the amount of time between each temperature read, in milliseconds
 
-const float R1 = 10000;                       // resistance of the first resistor
+const long RESISTOR_RESISTANCE = 9.78 * 1000;    // the resistance of the resistor connected serially with the temperature sensor
+const float ARDUINO_VOLTAGE = 4.74;
+
 const float C1 = 1.009249522e-03, C2 = 2.378405444e-04, C3 = 2.019202697e-07;       // constants for temperature conversion
 
 unsigned long next_blink_time;              // holds the next time the led should change state
@@ -108,12 +110,13 @@ void read_analog_temp(unsigned int temp_pin) {
 
   if (millis() >= next_temp_check_time) {                         // is it the time to check temperature
     float temp_voltage;
-    temp_voltage = analogRead(temp_pin);                          // read voltage from analog pin
+    temp_voltage = analogRead(A15);                               // read voltage from analog pin
     Serial.print("Temperature sensor: ");                         // print label for temperature reading to serial port
-    Serial.println(temp_voltage);                                 // print actual voltage to temperature sensor
     
-    //old_temperature_code(temp_voltage);                           // run old code
-    
+    old_temperature_code(temp_voltage);                           // run old code
+    Serial.print("Temp sensor voltage: ");
+    Serial.println((temp_voltage/1023.0)*ARDUINO_VOLTAGE);        // print actual voltage of the sensor
+
     next_temp_check_time = millis() + TEMP_CHECK_FREQUENCY;       // set the next time to read the temperature probe
   }
 }
@@ -123,7 +126,7 @@ void old_temperature_code(float Vo) {
   
   // Section from the old code
   float logR2, R2, T, Tc, Tf;                               // variables declaration for the temperature calculation
-  R2 = R1 * (1023.0 / (float)Vo - 1.0);
+  R2 = RESISTOR_RESISTANCE * ((1023.0 / (float)Vo) - 1.0);
   logR2 = log(R2);
   T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));
   Tc = T - 273.15;
