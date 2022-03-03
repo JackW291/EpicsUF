@@ -163,6 +163,13 @@ void read_analog_temp(int temp_pin) {
     float temp_voltage;
     temp_voltage = analogRead(temp_pin);                               // read voltage from analog pin
     Serial.print("Temperature sensor: ");                         // print label for temperature reading to serial port
+    float logR2, R2, T, Tc, Tf;                               // variables declaration for the temperature calculation
+    R2 = RESISTOR_RESISTANCE * ((1023.0 / (float)Vo) - 1.0);
+    logR2 = log(R2);
+    T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));
+    Tc = T - 273.15;
+    Tf = (Tc * 9.0)/ 5.0 + 32.0; 
+    ThingSpeak.setField(3, Tf);
     
     old_temperature_code(temp_voltage);                           // run old code
     Serial.print("Temp sensor voltage: ");
