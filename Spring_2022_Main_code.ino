@@ -1,5 +1,7 @@
 #include <Ezo_i2c.h>                        //include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <Wire.h>                           // enable I2C.
+#include <Ethernet.h>
+#include "ThingSpeak.h"                     // always include thingspeak header file after other header files and custom macros
 
 Ezo_board ph = Ezo_board(99, "PH");         //create a PH circuit object who's address is 99 and name is "PH"
 Ezo_board _do = Ezo_board(97, "DO");        //create a DO circuit object who's address is 97 and name is "DO"
@@ -20,17 +22,52 @@ unsigned long next_blink_time;              // holds the next time the led shoul
 unsigned long next_temp_check_time;         // holds the next time the program read the temperature
 boolean led_state = LOW;                    // keeps track of the current led state
 
+byte mac[] = {0x90, 0xA2, 0xDA, 0x10, 0x40, 0x4F};
+
+// Set the static IP address to use if the DHCP fails to assign
+IPAddress ip(192, 168, 0, 177);
+IPAddress myDns(192, 168, 0, 1)
+
+EthernetClient client;
+
+unsigned long myChannelNumber = 000000;
+const char * myWriteAPIKey = "XYZ";
 
 void setup() {
+  Ethernet.init(10);                        // Most Arduino Ethernet hardware
   pinMode(13, OUTPUT);                      // set the led output pin
   Serial.begin(9600);                       // Set the hardware serial port.
   Wire.begin();                             // enable I2C port.
 
   next_ezo_time = millis() + 1000;
+  
+  //Serial.println("Initialize Ethernet with DHCP:");
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // Check for Ethernet hardware present
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+      while (true) {
+        delay(1); // do nothing, no point running without Ethernet hardware
+      }
+    }
+    if (Ethernet.linkStatus() == LinkOFF) {
+      Serial.println("Ethernet cable is not connected.");
+    }
+    // try to congifure using IP address instead of DHCP:
+    Ethernet.begin(mac, ip, myDns);
+  } else {
+    Serial.print("  DHCP assigned IP ");
+    Serial.println(Ethernet.localIP());
+  }
+  // give the Ethernet shield a second to initialize:
+  delay(1000);
+  
+  ThingSpeak.begin(client);  // Initialize ThingSpeak
 }
 
 void loop() {
-  // non of these functions block or delay the execution
+  // none of these functions block or delay the execution
   read_ezo();
   read_analog_temp(TEMP_PIN);
   blink_led();
@@ -49,13 +86,20 @@ void blink_led() {
 
 // take sensor readings every second. this function returns immediately, if it is not time to interact with the EZO devices.
 void read_ezo() {
-
+int ph_reading = 0;
+int _do_reading = 0;
   if (request_pending) {                    // is a request pending?
     if (millis() >= next_ezo_time) {        // is it time for the reading to be taken?
-      receive_reading(ph);                  // get the reading from the PH circuit
+      ph_reading = receive_reading(ph);                  // get the reading from the PH circuit
+      
+//***Not sure if the language works this way, watch to make sure this works as expected
+      
       Serial.print("  ");
-      receive_reading(_do);                 // get the reading from the DO circuit
+      ThingSpeak.setField(1, ph_reading);
+      _do_reading = receive_reading(_do);                 // get the reading from the DO circuit
       Serial.println();
+      ThingSpeak.setField(2, _do_reading);
+
       request_pending = false;
       next_ezo_time = millis() + 1000;
     }
@@ -77,7 +121,14 @@ void update_display() {
 // upload data to cloud
 void upload_cloud() {
 
-  // add your cloud upload code here
+// write to the ThingSpeak channel 
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  if(x == 200){
+    Serial.println("Channel update successful.");
+  }
+  else{
+    Serial.println("Problem updating channel. HTTP error code " + String(x));
+  }
 }
 
 // function to decode the reading after the read command was issued
