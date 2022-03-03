@@ -7,12 +7,12 @@ Ezo_board _do = Ezo_board(97, "DO");        //create a DO circuit object who's a
 unsigned long next_ezo_time = 0;            // holds the time when the next EZO reading is due
 boolean request_pending = false;            // wether we've requested a reading from the EZO devices
 
-const unsigned int TEMP_PIN = A14;                  // the pin of the analog port of the temperature probe
+const int TEMP_PIN = A15;                   // the pin of the analog port of the temperature probe
 const unsigned int BLINK_FREQUENCY = 250;           // the frequency of the led blinking, in milliseconds
 const unsigned long TEMP_CHECK_FREQUENCY = 500;     // the amount of time between each temperature read, in milliseconds
 
-const long RESISTOR_RESISTANCE = 9.78 * 1000;    // the resistance of the resistor connected serially with the temperature sensor
-const float ARDUINO_VOLTAGE = 4.74;
+const long RESISTOR_RESISTANCE = 9.78 * 1000;       // the resistance of the resistor connected serially with the temperature sensor
+const float ARDUINO_VOLTAGE = 4.74;                 // the measured voltage of the arduino five volt
 
 const float C1 = 1.009249522e-03, C2 = 2.378405444e-04, C3 = 2.019202697e-07;       // constants for temperature conversion
 
@@ -106,11 +106,11 @@ void receive_reading(Ezo_board &Sensor) {
 }
 
 // function to read the temperature
-void read_analog_temp(unsigned int temp_pin) {
+void read_analog_temp(int temp_pin) {
 
   if (millis() >= next_temp_check_time) {                         // is it the time to check temperature
     float temp_voltage;
-    temp_voltage = analogRead(A15);                               // read voltage from analog pin
+    temp_voltage = analogRead(temp_pin);                               // read voltage from analog pin
     Serial.print("Temperature sensor: ");                         // print label for temperature reading to serial port
     
     old_temperature_code(temp_voltage);                           // run old code
