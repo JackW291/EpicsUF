@@ -40,7 +40,7 @@ void setup() {
   Wire.begin();                             // enable I2C port.
 
   next_ezo_time = millis() + 1000;
-  
+
   //Serial.println("Initialize Ethernet with DHCP:");
   if (Ethernet.begin(mac) == 0) {
     Serial.println("Failed to configure Ethernet using DHCP");
@@ -62,7 +62,7 @@ void setup() {
   }
   // give the Ethernet shield a second to initialize:
   delay(1000);
-  
+
   ThingSpeak.begin(client);  // Initialize ThingSpeak
 }
 
@@ -91,9 +91,9 @@ int _do_reading = 0;
   if (request_pending) {                    // is a request pending?
     if (millis() >= next_ezo_time) {        // is it time for the reading to be taken?
       ph_reading = receive_reading(ph);                  // get the reading from the PH circuit
-      
+
 //***Not sure if the language works this way, watch to make sure this works as expected
-      
+
       Serial.print("  ");
       ThingSpeak.setField(1, ph_reading);
       _do_reading = receive_reading(_do);                 // get the reading from the DO circuit
@@ -121,7 +121,7 @@ void update_display() {
 // upload data to cloud
 void upload_cloud() {
 
-// write to the ThingSpeak channel 
+// write to the ThingSpeak channel
   int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
   if(x == 200){
     Serial.println("Channel update successful.");
@@ -161,17 +161,13 @@ void read_analog_temp(int temp_pin) {
 
   if (millis() >= next_temp_check_time) {                         // is it the time to check temperature
     float temp_voltage;
-    temp_voltage = analogRead(temp_pin);                               // read voltage from analog pin
+    temp_voltage = analogRead(temp_pin);                          // read voltage from analog pin
     Serial.print("Temperature sensor: ");                         // print label for temperature reading to serial port
-    float logR2, R2, T, Tc, Tf;                               // variables declaration for the temperature calculation
-    R2 = RESISTOR_RESISTANCE * ((1023.0 / (float)Vo) - 1.0);
-    logR2 = log(R2);
-    T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));
-    Tc = T - 273.15;
-    Tf = (Tc * 9.0)/ 5.0 + 32.0; 
+    float Tc, Tf;                                                 // variables declaration for the temperature calculation
+
+    Tc = old_temperature_code(temp_voltage);                      // run old code
+    Tf = (Tc * 9.0)/ 5.0 + 32.0;
     ThingSpeak.setField(3, Tf);
-    
-    old_temperature_code(temp_voltage);                           // run old code
     Serial.print("Temp sensor voltage: ");
     Serial.println((temp_voltage/1023.0)*ARDUINO_VOLTAGE);        // print actual voltage of the sensor
 
@@ -180,19 +176,21 @@ void read_analog_temp(int temp_pin) {
 }
 
 // function to calculate temperature from the old code (Fall 2020)
-void old_temperature_code(float Vo) {
-  
+float old_temperature_code(float Vo) {
+
   // Section from the old code
   float logR2, R2, T, Tc, Tf;                               // variables declaration for the temperature calculation
   R2 = RESISTOR_RESISTANCE * ((1023.0 / (float)Vo) - 1.0);
   logR2 = log(R2);
   T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));
   Tc = T - 273.15;
-  Tf = (Tc * 9.0)/ 5.0 + 32.0; 
+  Tf = (Tc * 9.0)/ 5.0 + 32.0;
 
-  Serial.print("Temperature: "); 
+  Serial.print("Temperature: ");
   Serial.print(Tf);
   Serial.print(" F; ");
   Serial.print(Tc);
   Serial.println(" C");
+
+  return Tc;
 }
