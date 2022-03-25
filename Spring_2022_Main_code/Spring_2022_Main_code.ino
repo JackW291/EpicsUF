@@ -10,6 +10,8 @@ Ezo_board _do = Ezo_board(97, "DO");        //create a DO circuit object who's a
 unsigned long next_ezo_time = 0;            // holds the time when the next EZO reading is due
 boolean request_pending = false;            // wether we've requested a reading from the EZO devices
 #define EZO_FREQUENCY 1000                  // frequency of checking EZO sensor
+float pH;                                   // global to hold pH
+float _do;                                  // global to hold DO
 
 // Water temperature
 #define TEMP_PIN 15                         // the pin of the analog port of the temperature probe
@@ -19,6 +21,8 @@ unsigned long next_temp_check_time;         // holds the next time the program r
 const long RESISTOR_RESISTANCE = 9.78 * 1000;       // the resistance of the resistor connected serially with the temperature sensor
 const float ARDUINO_VOLTAGE = 4.74;                 // the measured voltage of the arduino five volt
 const float C1 = 1.009249522e-03, C2 = 2.378405444e-04, C3 = 2.019202697e-07;       // constants for temperature conversion
+float water_Tc;                             // global to hold water temperature in Celsius
+float water_Tf;                             // global to hold water temperature in Fahrenheit
 
 // Status LED
 unsigned long next_blink_time;              // holds the next time the led should change state
@@ -30,6 +34,9 @@ boolean led_state = LOW;                    // keeps track of the current led st
 #define HUMIDITY_FREQUENCY 2000             // frequency to check the humidity
 DHT hum_sen(DHTPIN, DHTTYPE);               // humidity sensor DHT object
 unsigned long next_hum_time = 0;            // next time to check humidity
+float humidity;                             // global to hold humidity
+float air_Tc                                // global to hold air temperature in Celsius
+float air_Tf                                // global to hold air temperature in Fahrenheit
 
 byte mac[] = {0x90, 0xA2, 0xDA, 0x10, 0x40, 0x4F};
 
@@ -81,6 +88,7 @@ void setup() {
   Serial.println("Initializing...");
   delay(1000);
 
+  // ThingSpeak
   Serial.println("Connecting to ThingSpeak...");
   ThingSpeak.begin(client);  // Initialize ThingSpeak
 }
@@ -113,14 +121,17 @@ void read_ezo() {
   int _do_reading = 0;
   if (request_pending) {                    // is a request pending?
     if (millis() >= next_ezo_time) {        // is it time for the reading to be taken?
-      ph_reading = receive_reading(ph);                  // get the reading from the PH circuit
-
-//***Not sure if the language works this way, watch to make sure this works as expected
-
+      // Get the outputs and print the output in serial
+      ph_reading = receive_reading(ph);                   // get the reading from the PH circuit
+      pH = ph_reading;                                    // set the global for pH
       Serial.print("  ");
-      ThingSpeak.setField(1, ph_reading);
       _do_reading = receive_reading(_do);                 // get the reading from the DO circuit
+      _do = _do_reading                                   // set the global for DO
       Serial.println();
+
+      // Upload to ThingSpeak
+//***Not sure if the language works this way, watch to make sure this works as expected
+      ThingSpeak.setField(1, ph_reading);
       ThingSpeak.setField(2, _do_reading);
 
       request_pending = false;
@@ -146,10 +157,10 @@ void upload_cloud() {
 
 // write to the ThingSpeak channel
   int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
-  if(x == 200){
+  if(x == 200) {
     Serial.println("Channel update successful.");
   }
-  else{
+  else {
     Serial.println("Problem updating channel. HTTP error code " + String(x));
   }
 }
@@ -196,6 +207,8 @@ void read_analog_temp(int temp_pin) {
     Serial.print("Temp sensor voltage: ");
     Serial.println((temp_voltage/1023.0)*ARDUINO_VOLTAGE);        // print actual voltage of the sensor
 
+    water_Tc = Tc;                                                // set global for water temperature in Celsius
+    water_Tf = Tf;                                                // set global for water temperature in Fahrenheit
     next_temp_check_time = millis() + TEMP_CHECK_FREQUENCY;       // set the next time to read the temperature probe
   }
 }
@@ -235,12 +248,15 @@ void hum_read() {
       Serial.println("Failed to read from DHT sensor!");
     }
     else {
-      Serial.print("Humidity: "); 
+      // Print the output to serial monitor
+      Serial.print("Humidity: ");
       Serial.print(h);
       Serial.print(" %\t");
-      Serial.print("Temperature: "); 
+      Serial.print("Temperature: ");
       Serial.print(Tc);
       Serial.println(" *C ");
+      air_Tc = Tc;                        // set global air temperature in Celsius
+      air_Tf = Tf;                        // set global air temperatire in Fahrenheit
     }
 
     next_hum_time = millis() + HUMIDITY_FREQUENCY;        // set the next read time
