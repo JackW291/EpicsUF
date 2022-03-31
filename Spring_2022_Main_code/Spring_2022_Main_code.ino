@@ -1,6 +1,21 @@
+/*
+ * Spring_2022_Main_code
+ * 
+ * Contributer:
+ * Jittipat Shobbakbun - winsatid62@gmail.com (If email me please say it is about EPICS-UF in the title)
+ * 
+ * Description:
+ * This Arduino program is based on the Whitebox T2 Mini MkII (https://www.whiteboxes.ch/docs/tentacle/t2-mkII/#/). 
+ * The code is originally designed to read data from EZO sensors that is connected to the Whitebox T2 shield.
+ * We have added more code for other sensors that we will use (see the list of sensors below). The code is structured
+ * so the setup contain the setup for all sensors and the network system. The main loop contain (mostly) non blocking
+ * functions that read the data of each sensor and the function that upload those data to ThingSpeak. The code put
+ * all the sensor reading in global variables (see the list of readings below).
+ * 
+ */
 #include <Ezo_i2c.h>                        //include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <Wire.h>                           // enable I2C.
-#include <Ethernet.h>
+#include <Ethernet.h>                       // for internet shield
 #include "ThingSpeak.h"                     // always include thingspeak header file after other header files and custom macros
 #include "DHT.h"                            // For humidity sensor
 
@@ -9,14 +24,14 @@ Ezo_board ph = Ezo_board(99, "PH");         //create a PH circuit object who's a
 Ezo_board _do = Ezo_board(97, "DO");        //create a DO circuit object who's address is 97 and name is "DO"
 unsigned long next_ezo_time = 0;            // holds the time when the next EZO reading is due
 boolean request_pending = false;            // wether we've requested a reading from the EZO devices
-#define EZO_FREQUENCY 1000                  // frequency of checking EZO sensor
-float pH;                                   // global to hold pH
-float _do;                                  // global to hold DO
+#define EZO_FREQUENCY 1000                  // frequency of checking EZO sensor (EZO sensors need around 1000 milliseconds to process the data, so this should be more than that)
+float pH_reading;                           // global to hold pH
+float _DO_reading;                          // global to hold DO
 
 // Water temperature
 #define TEMP_PIN 15                         // the pin of the analog port of the temperature probe
 #define BLINK_FREQUENCY 250                 // the frequency of the led blinking, in milliseconds
-#define TEMP_CHECK_FREQUENCY 500            // the amount of time between each temperature read, in milliseconds
+#define TEMP_CHECK_FREQUENCY 500            // the amount of time between each temperature read, in milliseconds (No minimum)
 unsigned long next_temp_check_time;         // holds the next time the program read the temperature
 const long RESISTOR_RESISTANCE = 9.78 * 1000;       // the resistance of the resistor connected serially with the temperature sensor
 const float ARDUINO_VOLTAGE = 4.74;                 // the measured voltage of the arduino five volt
@@ -31,13 +46,14 @@ boolean led_state = LOW;                    // keeps track of the current led st
 // Humidity and air temperature
 #define DHTPIN 2                            // what pin we're connected to (Digital)
 #define DHTTYPE DHT22                       // DHT 22  (AM2302)
-#define HUMIDITY_FREQUENCY 2000             // frequency to check the humidity
+#define HUMIDITY_FREQUENCY 1000             // frequency to check the humidity (It need around 250 milliseconds to process between each reading)
 DHT hum_sen(DHTPIN, DHTTYPE);               // humidity sensor DHT object
 unsigned long next_hum_time = 0;            // next time to check humidity
 float humidity;                             // global to hold humidity
-float air_Tc                                // global to hold air temperature in Celsius
-float air_Tf                                // global to hold air temperature in Fahrenheit
+float air_Tc;                               // global to hold air temperature in Celsius
+float air_Tf;                               // global to hold air temperature in Fahrenheit
 
+// Network
 byte mac[] = {0x90, 0xA2, 0xDA, 0x10, 0x40, 0x4F};
 
 // Set the static IP address to use if the DHCP fails to assign
@@ -46,8 +62,15 @@ IPAddress myDns(192, 168, 0, 1);
 
 EthernetClient client;
 
-unsigned long myChannelNumber = 000000;
-const char * myWriteAPIKey = "XYZ";
+unsigned long myChannelNumber = 1646406;
+const char * myWriteAPIKey = "PI0UW7PG786YHESL";
+
+// Code for time interval between each updates
+unsigned long last_upload = 0;             // Time of the last update
+
+// Setting for displaying with Serial
+#define DISPLAY_INDIVIDUAL 0
+#define DISPLAY_DEBUG 1
 
 void setup() {
   Serial.begin(9600);                       // set the hardware serial port.
@@ -56,11 +79,6 @@ void setup() {
   pinMode(13, OUTPUT);                      // set the led output pin
   Wire.begin();                             // enable I2C port.
   hum_sen.begin();                          // set the dht for humidity sensor
-
-  // Set the start read times
-  next_ezo_time = millis() + EZO_FREQUENCY;
-  next_temp_check_time = millis() + TEMP_CHECK_FREQUENCY;
-  next_hum_time = millis() + HUMIDITY_FREQUENCY;
 
   // Set up the ethernet connection
   //Serial.println("Initialize Ethernet with DHCP:");
@@ -91,17 +109,24 @@ void setup() {
   // ThingSpeak
   Serial.println("Connecting to ThingSpeak...");
   ThingSpeak.begin(client);  // Initialize ThingSpeak
+
+  // Set the start read times
+  next_ezo_time = millis() + EZO_FREQUENCY;
+  next_temp_check_time = millis() + TEMP_CHECK_FREQUENCY;
+  next_hum_time = millis() + HUMIDITY_FREQUENCY;
+  last_upload = millis();
 }
 
 void loop() {
   // none of these functions block or delay the execution
-  //Serial.println("Reading data...");
   read_ezo();
   read_analog_temp(TEMP_PIN);
   hum_read();
   blink_led();
   update_display();
-  Serial.println("Uploading data...");
+  if (DISPLAY_DEBUG) {
+    Serial.println("Uploading data...");
+  }
   upload_cloud();
   Serial.println("");
 }
@@ -117,23 +142,18 @@ void blink_led() {
 
 // take sensor readings every second. this function returns immediately, if it is not time to interact with the EZO devices.
 void read_ezo() {
-  int ph_reading = 0;
-  int _do_reading = 0;
   if (request_pending) {                    // is a request pending?
     if (millis() >= next_ezo_time) {        // is it time for the reading to be taken?
       // Get the outputs and print the output in serial
-      ph_reading = receive_reading(ph);                   // get the reading from the PH circuit
-      pH = ph_reading;                                    // set the global for pH
-      Serial.print("  ");
-      _do_reading = receive_reading(_do);                 // get the reading from the DO circuit
-      _do = _do_reading                                   // set the global for DO
-      Serial.println();
-
-      // Upload to ThingSpeak
-//***Not sure if the language works this way, watch to make sure this works as expected
-      ThingSpeak.setField(1, ph_reading);
-      ThingSpeak.setField(2, _do_reading);
-
+      pH_reading = receive_reading(ph);                   // get the reading from the PH circuit
+      if (DISPLAY_INDIVIDUAL) {
+        Serial.print("  ");
+      }
+      _DO_reading = receive_reading(_do);                 // get the reading from the DO circuit
+      if (DISPLAY_INDIVIDUAL) {
+        Serial.println();
+      }
+      
       request_pending = false;
       next_ezo_time = millis() + EZO_FREQUENCY;
     }
@@ -147,18 +167,28 @@ void read_ezo() {
 
 // update the display
 void update_display() {
-
   // add your display code here
 
 }
 
 // upload data to cloud
 void upload_cloud() {
-
+  // Upload to ThingSpeak
+//***Not sure if the language works this way, watch to make sure this works as expected
+  ThingSpeak.setField(1, pH_reading);
+  ThingSpeak.setField(2, _DO_reading);
+  ThingSpeak.setField(3, water_Tf);
+  
+  unsigned long time_interval = 0;
 // write to the ThingSpeak channel
   int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
   if(x == 200) {
     Serial.println("Channel update successful.");
+    time_interval = millis() - last_upload;
+    last_upload = millis();
+    Serial.print("Last successful upload was ");
+    Serial.print(time_interval);
+    Serial.println("milliseconds ago.");
   }
   else {
     Serial.println("Problem updating channel. HTTP error code " + String(x));
@@ -171,22 +201,24 @@ float receive_reading(Ezo_board &Sensor) {
   Serial.print(Sensor.get_name()); Serial.print(": ");  // print the name of the circuit getting the reading
   Sensor.receive_read_cmd();                            // get the response data
 
-  switch (Sensor.get_error()) {                         // switch case based on what the response code is.
-    case Ezo_board::SUCCESS:
-      Serial.print(Sensor.get_last_received_reading()); //the command was successful, print the reading
-      break;
-
-    case Ezo_board::FAIL:
-      Serial.print("Failed ");                          //means the command has failed.
-      break;
-
-    case Ezo_board::NOT_READY:
-      Serial.print("Pending ");                         //the command has not yet been finished calculating.
-      break;
-
-    case Ezo_board::NO_DATA:
-      Serial.print("No Data ");                         //the sensor has no data to send.
-      break;
+  if (DISPLAY_INDIVIDUAL) {
+    switch (Sensor.get_error()) {                         // switch case based on what the response code is.
+      case Ezo_board::SUCCESS:
+        Serial.print(Sensor.get_last_received_reading()); //the command was successful, print the reading
+        break;
+  
+      case Ezo_board::FAIL:
+        Serial.print("Failed ");                          //means the command has failed.
+        break;
+  
+      case Ezo_board::NOT_READY:
+        Serial.print("Pending ");                         //the command has not yet been finished calculating.
+        break;
+  
+      case Ezo_board::NO_DATA:
+        Serial.print("No Data ");                         //the sensor has no data to send.
+        break;
+    }
   }
 
   return Sensor.get_last_received_reading();            //return the sensor reading
@@ -203,7 +235,6 @@ void read_analog_temp(int temp_pin) {
 
     Tc = old_temperature_code(temp_voltage);                      // run old code
     Tf = (Tc * 9.0)/ 5.0 + 32.0;
-    ThingSpeak.setField(3, Tf);
     Serial.print("Temp sensor voltage: ");
     Serial.println((temp_voltage/1023.0)*ARDUINO_VOLTAGE);        // print actual voltage of the sensor
 
