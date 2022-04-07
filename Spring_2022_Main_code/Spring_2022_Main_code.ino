@@ -36,11 +36,11 @@
 
  *  
  * List of sensor readings (global variables):
- *  1. float pH_reading  - reading from pH sensor
- *  2. float _DO_reading - reading from dissolved oxygen sensor
+ *  1. float pH_reading  - reading from pH sensor (desired range: 6.5 and 7.0)
+ *  2. float _DO_reading - reading from dissolved oxygen sensor (desired range: 5.0 mg/L)
  *  3. float water_Tc    - Water temperature in Celsius of the temperature probe
- *  4. float water_Tf    - Water temperature in Fahrenheit of the temperature probe
- *  5. float humidity    - Humidity in the air in percent (0-100)
+ *  4. float water_Tf    - Water temperature in Fahrenheit of the temperature probe (desired range: 65 and 75 degrees)
+ *  5. float humidity    - Humidity in the air in percent (Can read from 0-100)
  *  6. float air_Tc      - Air temperature in Celsius from humidity sensor
  *  7. float air_Tf      - Air temperature in Fahrenheit from humidity sensor
  * 
@@ -152,13 +152,16 @@ void setup() {
         delay(1); // do nothing, no point running without Ethernet hardware
       }
     }
-    if (Ethernet.linkStatus() == LinkOFF) {
+    else if (Ethernet.linkStatus() == LinkOFF) {
       Serial.println("Ethernet cable is not connected.");
     }
-    // try to congifure using IP address instead of DHCP:
-    Serial.println("Cofigure using IP address...");
-    Ethernet.begin(mac, ip, myDns);
-  } else {
+    else {
+      // try to congifure using IP address instead of DHCP:
+      Serial.println("Cofigure using IP address...");
+      Ethernet.begin(mac, ip, myDns);
+    }
+  } 
+  else {
     Serial.print("  DHCP assigned IP ");
     Serial.println(Ethernet.localIP());
   }
@@ -395,6 +398,8 @@ void upload_cloud() {
     ThingSpeak.setField(1, pH_reading);
     ThingSpeak.setField(2, _DO_reading);
     ThingSpeak.setField(3, water_Tf);
+    ThingSpeak.setField(5, humidity);
+    ThingSpeak.setField(6, air_Tf);
     
     unsigned long time_interval = 0;                                    // variable for keeping track of how long the last successful update was
     // write fields to the ThingSpeak channel
