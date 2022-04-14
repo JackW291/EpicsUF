@@ -1,27 +1,28 @@
 /*
  * Spring_2022_Main_code
- * 
+ *
  * GitHub: https://github.com/JackW291/EpicsUF
  * Contributer:
  * Jittipat Shobbakbun - winsatid62@gmail.com (If email me please say it is about EPICS-UF in the subject)
  * Jack
- * 
+ * Alex
+ *
  * Description:
- * This Arduino program is based on the Whitebox T2 Mini MkII (https://www.whiteboxes.ch/docs/tentacle/t2-mkII/#/). 
+ * This Arduino program is based on the Whitebox T2 Mini MkII (https://www.whiteboxes.ch/docs/tentacle/t2-mkII/#/).
  * The code is originally designed to read data from EZO sensors that is connected to the Whitebox T2 shield.
  * We have added more code for other sensors that we will use (see the list of sensors below). The code is structured
  * so the setup contain the setup for all sensors and the network system. The main loop contain (mostly) non blocking
  * functions that read the data of each sensor and the function that upload those data to ThingSpeak. The code put
  * all the sensor reading in global variables (see the list of reading global variables below). We use ThingSpeak as
- * the cloud that the Arduino upload the data to. The Arduino connect to the internet via ethernet cable connected 
+ * the cloud that the Arduino upload the data to. The Arduino connect to the internet via ethernet cable connected
  * to the sheild.
- * 
+ *
  * List of sensors:
  *  1. pH sensor                  - digital - use Ezo_i2c.h library
  *  2. DO Sensor                  - digital - use Ezo_i2c.h library
  *  3. Water temperature sensor   - analog  - It is a thermistor. Measure voltage to calculate resistance and temperature
  *  4. Humidity / Air temp sensor - digital - use DHT.h library
- * 
+ *
  * List of functions:
  *  1.  void setup()       - default Arduino setup function
  *  2.  void loop()        - default Arduino loop function
@@ -34,7 +35,7 @@
  *  9.  void update_display()   - Output readings to serial port
  *  10. void upload_cloud()     - Upload to ThingSpeak every UPLOAD_FREQUENCY
 
- *  
+ *
  * List of sensor readings (global variables):
  *  1. float pH_reading  - reading from pH sensor (desired range: 6.5 and 7.0)
  *  2. float _DO_reading - reading from dissolved oxygen sensor (desired range: 5.0 mg/L)
@@ -43,7 +44,7 @@
  *  5. float humidity    - Humidity in the air in percent (Can read from 0-100)
  *  6. float air_Tc      - Air temperature in Celsius from humidity sensor
  *  7. float air_Tf      - Air temperature in Fahrenheit from humidity sensor
- * 
+ *
  */
 #include <Ezo_i2c.h>                        // include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <Wire.h>                           // enable I2C.
@@ -103,7 +104,7 @@ boolean request_pending = false;            // wether we've requested a reading 
 
 //--Water temperature--
 // setups
-#define TEMP_PIN 15                                 // the pin of the analog port of the temperature probe
+#define TEMP_PIN 0                                  // the ANALOG pin of the analog port of the temperature probe
 const long RESISTOR_RESISTANCE = 9.78 * 1000;       // the resistance of the resistor connected serially with the temperature sensor
 const float ARDUINO_VOLTAGE = 4.74;                 // the measured voltage of the arduino five volt
 // globals
@@ -160,7 +161,7 @@ void setup() {
       Serial.println("Cofigure using IP address...");
       Ethernet.begin(mac, ip, myDns);
     }
-  } 
+  }
   else {
     Serial.print("  DHCP assigned IP ");
     Serial.println(Ethernet.localIP());
@@ -221,7 +222,7 @@ void read_ezo() {
       if (DISPLAY_INDIVIDUAL) {
         Serial.println();
       }
-      
+
       request_pending = false;
       next_ezo_time = millis() + EZO_FREQUENCY;
     }
@@ -246,15 +247,15 @@ float receive_reading(Ezo_board &Sensor) {
       case Ezo_board::SUCCESS:
         Serial.print(Sensor.get_last_received_reading()); //the command was successful, print the reading
         break;
-  
+
       case Ezo_board::FAIL:
         Serial.print("Failed ");                          //means the command has failed.
         break;
-  
+
       case Ezo_board::NOT_READY:
         Serial.print("Pending ");                         //the command has not yet been finished calculating.
         break;
-  
+
       case Ezo_board::NO_DATA:
         Serial.print("No Data ");                         //the sensor has no data to send.
         break;
@@ -272,7 +273,7 @@ void read_analog_temp(int temp_pin) {
     float temp_voltage;
     temp_voltage = analogRead(temp_pin);                          // read voltage from analog pin
     probe_voltage = (temp_voltage/1023.0)*ARDUINO_VOLTAGE;        // set global variable for the probe sensor
-    
+
     if (DISPLAY_INDIVIDUAL) {
       Serial.print("Temperature sensor: ");                       // print label for temperature reading to serial port
     }
@@ -298,7 +299,7 @@ float old_temperature_code(float Vo) {
   // Calculate the temperature from the voltage
   R2 = RESISTOR_RESISTANCE * ((1023.0 / (float)Vo) - 1.0);
   logR2 = log(R2);
-  T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));
+  T = (1.0 / (C1 + C2*logR2 + C3*logR2*logR2*logR2));       // Used linear regression to figure this out from testing
   // Convert them to Celsius and Fahrenheit
   Tc = T - 273.15;
   Tf = (Tc * 9.0)/ 5.0 + 32.0;
@@ -318,7 +319,7 @@ float old_temperature_code(float Vo) {
 
 // Function for reading humidity sensor.
 void hum_read() {
-  // adapted from the code from 
+  // adapted from the code from
   if (millis() >= next_hum_time) {
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
@@ -326,7 +327,7 @@ void hum_read() {
     // Read temperature as Celsius
     float Tc = hum_sen.readTemperature();
     float Tf = (Tc * 9.0)/ 5.0 + 32.0;
-    
+
     // Check if any reads failed and exit early (to try again).
     if (isnan(h) || isnan(Tc)) {
       if (DISPLAY_INDIVIDUAL) {
@@ -336,7 +337,7 @@ void hum_read() {
     else {
       air_Tc = Tc;                        // set global air temperature in Celsius
       air_Tf = Tf;                        // set global air temperatire in Fahrenheit
-      humidity = h;                       // set global humidity 
+      humidity = h;                       // set global humidity
       // Print the output to serial monitor
       if (DISPLAY_INDIVIDUAL) {
         Serial.print("Humidity: ");
@@ -357,6 +358,7 @@ void hum_read() {
 void update_display() {
   if (millis() >= next_display) {                       // check if it is time to display data
     next_display = millis() + DISPLAY_FREQUENCY;        // if it is, reset the clock to the next time
+    Serial.println();
     Serial.println("Readings:");                        // Print title of the display readings
     // pH
     Serial.print("pH: ");
@@ -382,7 +384,6 @@ void update_display() {
     Serial.print("Humidity: ");
     Serial.print(humidity);
     Serial.println(" %");
-    Serial.println();
   }
 }
 
@@ -400,7 +401,7 @@ void upload_cloud() {
     ThingSpeak.setField(3, water_Tf);
     ThingSpeak.setField(5, humidity);
     ThingSpeak.setField(6, air_Tf);
-    
+
     unsigned long time_interval = 0;                                    // variable for keeping track of how long the last successful update was
     // write fields to the ThingSpeak channel
     int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
