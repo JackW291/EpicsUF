@@ -45,6 +45,9 @@
  *  6. float air_Tc      - Air temperature in Celsius from humidity sensor
  *  7. float air_Tf      - Air temperature in Fahrenheit from humidity sensor
  *
+ *
+ *  GOALS:
+ *  - Sensor alerts when the value is
  */
 #include <Ezo_i2c.h>                        // include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <Wire.h>                           // enable I2C.
