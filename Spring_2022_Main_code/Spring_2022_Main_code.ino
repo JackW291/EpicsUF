@@ -45,9 +45,21 @@
  *  6. float air_Tc      - Air temperature in Celsius from humidity sensor
  *  7. float air_Tf      - Air temperature in Fahrenheit from humidity sensor
  *
+ * --------------------------------------------------------------------------- *
  *
  *  GOALS:
- *  - Sensor alerts when the value is
+ *  - Sensor alerts when the value is out of suitable ranges (found in sensors list above)
+ *  - Detect faulty connection or sensors
+ *      - Maybe EZO have something about checking if ther is a conencted sensor
+ *      - Maybe check when values are impossibly out of ranges (Absolute zero, for example)
+ *  - Power saving mode. Read sensors further aparts and only read every 15 seconds (fastest you can upload) when it detect some error. Maybe implement a sleep to arduino and only wake up every half an hour or some amount of time
+ *  - Implement flow rate sensor - would need to know what flow rate sensor wil use.
+ *
+ *  STRETCH GOALS:
+ *  - Automatically change pH by pumping safe acidic or basic solutions
+ *  - Activate air pump when having insufficient dissolved oxygen
+ *  - Control HVAC system automatically using temperature and
+ *  - Maybe water heater too?
  */
 #include <Ezo_i2c.h>                        // include the EZO I2C library from https://github.com/Atlas-Scientific/Ezo_I2c_lib
 #include <Wire.h>                           // enable I2C.
@@ -339,7 +351,7 @@ void hum_read() {
     }
     else {
       air_Tc = Tc;                        // set global air temperature in Celsius
-      air_Tf = Tf;                        // set global air temperatire in Fahrenheit
+      air_Tf = Tf;                        // set global air temperature in Fahrenheit
       humidity = h;                       // set global humidity
       // Print the output to serial monitor
       if (DISPLAY_INDIVIDUAL) {
