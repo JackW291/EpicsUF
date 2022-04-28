@@ -2,10 +2,11 @@
  * Spring_2022_Main_code
  *
  * GitHub: https://github.com/JackW291/EpicsUF
+ *
  * Contributer:
- * Jittipat Shobbakbun - winsatid62@gmail.com (If email me please say it is about EPICS-UF in the subject)
- * Jack
- * Alex
+ * Jittipat Shobbakbun (Win) [Coder / Spring 2022] - winsatid62@gmail.com (If email me please say it is about EPICS-UF in the subject)
+ * Jack Wagner [Network code / Spring 2022]
+ * Alex Mate [Physical system and ThingSpeak / Spring 2022]
  *
  * Description:
  * This Arduino program is based on the Whitebox T2 Mini MkII (https://www.whiteboxes.ch/docs/tentacle/t2-mkII/#/).
@@ -29,7 +30,7 @@
  *  3.  void blink_led()   - blink LED every BLINK_FREQUENCY milliseconds
  *  4.  void read_ezo()    - read from EZO sensors
  *  5.  float receive_reading(Ezo_board &Sensor) - Take EZO sensor object, read the data and output it as float
- *  6.  void read_analog_temp(int temp_pin)      - Take analog pin number and read temperature probe connected to that pin
+ *  6.  void read_analog_temp()      - Take analog pin number and read temperature probe connected to that pin
  *  7.  float old_temperature_code(float Vo)     - Take in voltage reading from temperature sensor and calculate temperature
  *  8.  void hum_read()         - Read humidity and air temperature from humidity sensor
  *  9.  void update_display()   - Output readings to serial port
@@ -203,7 +204,7 @@ void loop() {
   // none of these functions block or delay the execution
   // read sensors
   read_ezo();
-  read_analog_temp(TEMP_PIN);
+  read_analog_temp();
   hum_read();
   // blink status update
   blink_led();
@@ -282,11 +283,10 @@ float receive_reading(Ezo_board &Sensor) {
 
 
 // function to read the temperature from temperature probe. Return if it is not the time to do it yet.
-void read_analog_temp(int temp_pin) {
-
+void read_analog_temp() {
   if (millis() >= next_temp_check_time) {                         // is it the time to check temperature
     float temp_voltage;
-    temp_voltage = analogRead(temp_pin);                          // read voltage from analog pin
+    temp_voltage = analogRead(TEMP_PIN);                          // read voltage from analog pin
     probe_voltage = (temp_voltage/1023.0)*ARDUINO_VOLTAGE;        // set global variable for the probe sensor
 
     if (DISPLAY_INDIVIDUAL) {
@@ -429,8 +429,8 @@ void upload_cloud() {
         // display the time since last upload
         if (DISPLAY_DEBUG) {
           Serial.print("Last successful upload was ");
-          Serial.print(time_interval);
-          Serial.println("milliseconds ago.");
+          Serial.print(time_interval / 1000.0);
+          Serial.println("seconds ago.");
         }
       }
       else {
